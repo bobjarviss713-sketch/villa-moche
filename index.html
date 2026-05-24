@@ -8,7 +8,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
     <style>
         :root{--bg-dark:#F7F6F2;--bg-card:#FFFFFF;--bg-hover:rgba(122,74,32,0.08);--text:#2B2B2B;--text-muted:#8B8B8B;--green:#6DAE4A;--amber:#E6B325;--red:#D64545;--blue:#5D8AA8;--purple:#8B6914;--cyan:#A8D48A;--pink:#C4846A;--radius:12px;--bg-primary:#7A4A20;--bg-secondary:#5E3615;--bg-elevated:#FFFFFF;--green-dim:rgba(109,174,74,.15);--amber-dim:rgba(230,179,37,.12);--red-dim:rgba(214,69,69,.12);--blue-dim:rgba(93,138,168,.12);--purple-dim:rgba(139,105,20,.12);--cyan-dim:rgba(168,212,138,.12);--pink-dim:rgba(196,132,106,.12);--radius-sm:6px;--radius-md:10px;--radius-lg:16px;--shadow-card:0 4px 24px rgba(122,74,32,0.08);--shadow-glow:0 0 30px rgba(109,174,74,.12);--border-subtle:#EAE7E2;--transition:.3s cubic-bezier(.4,0,.2,1);--gradient-green:linear-gradient(135deg,#6DAE4A,#A8D48A);--gradient-amber:linear-gradient(135deg,#E6B325,#7A4A20);--gradient-red:linear-gradient(135deg,#D64545,#C4846A);--glass-bg:rgba(255,255,255,.85);--shadow-elevated:0 8px 32px rgba(122,74,32,0.1);--shadow-glow-green:0 0 20px rgba(109,174,74,.2);--shadow-glow-amber:0 0 20px rgba(230,179,37,.2);--shadow-glow-red:0 0 20px rgba(214,69,69,.2);--glass-border:#EAE7E2;--glass-shine:linear-gradient(135deg,rgba(255,255,255,.06) 0%,transparent 50%);--bounce:cubic-bezier(.68,-.55,.265,1.55);--brown:#7A4A20;--brown-light:#8B5E3C;--brown-dark:#5E3615;--green-light:#A8D48A;--green-dark:#5A9A3D;--cream:#F7F6F2;--white-soft:#F7F6F2}.light{--bg-dark:#EAE7E2;--bg-card:#FFFFFF;--bg-hover:#E9ECEF;--text:#2B2B2B;--text-muted:#8B8B8B;--shadow-card:0 4px 24px rgba(122,74,32,0.06);--border-subtle:#D8D2C8;--glass-bg:rgba(255,255,255,.92);--shadow-elevated:0 8px 32px rgba(122,74,32,0.08);--glass-border:#D8D2C8}
         *{margin:0;padding:0;box-sizing:border-box;font-family:'Poppins','Inter',sans-serif}
@@ -3057,64 +3058,73 @@ if(!window._publicMesaId){
 }
 </script>
 <script>
-// ===== DEEP AUTO-SYNC: Proxy que atrapa TODA mutacion (arrays, objetos, propiedades anidadas) =====
-window._s=0;var _st=null,_syncCols=['users','inventory','menu','orders','tables','areas','cashDesks','customers','salesHistory','reservations','promotions','deliveries','auditLogs','cashClosures','printers','printJobs','recipes','egresos'];
-function _dw(v,p){
-    if(v===null||typeof v!=='object'||v._wp)return v;
-    return Array.isArray(v)?_wa(v,p):_wo(v,p)
+// ===== FIREBASE REALTIME DB - SINCRONIZACION GLOBAL EN VIVO =====
+// REEMPLAZA esta configuracion con los datos de tu proyecto Firebase
+var firebaseConfig = {
+  apiKey: "AIzaSyAquiVaTuApiKey",
+  authDomain: "tunombre-de-proyecto.firebaseapp.com",
+  databaseURL: "https://tunombre-de-proyecto-default-rtdb.firebaseio.com",
+  projectId: "tunombre-de-proyecto",
+  storageBucket: "tunombre-de-proyecto.appspot.com",
+  messagingSenderId: "123456789012",
+  appId: "1:123456789012:web:abcdef123456"
+};
+
+firebase.initializeApp(firebaseConfig);
+var fbDB = firebase.database();
+
+var _syncCols = ['users','inventory','menu','orders','tables','areas','cashDesks','customers','salesHistory','reservations','promotions','deliveries','auditLogs','cashClosures','printers','printJobs','recipes','egresos'];
+
+function _fbToArr(d) {
+  if (!d) return [];
+  if (typeof d !== 'object' || Array.isArray(d)) return d;
+  return Object.keys(d).map(function(k){return d[k]});
 }
-function _wo(o,p){
-    if(o._wp)return o;
-    Object.defineProperty(o,'_wp',{value:1,writable:!1});
-    Object.keys(o).forEach(function(k){o[k]=_dw(o[k],p+'.'+k)});
-    return new Proxy(o,{
-        set:function(t,pr,v){var ch=t[pr]!==v;t[pr]=_dw(v,p+'.'+pr);if(ch)_qs();return!0},
-        deleteProperty:function(t,pr){if(pr in t){delete t[pr];_qs()}return!0}
-    })
+
+// Listener de Firebase: actualiza DB local cuando otro dispositivo cambia datos
+function _initFbSync() {
+  _syncCols.forEach(function(col) {
+    fbDB.ref('db/' + col).on('value', function(snaps) {
+      DB[col] = _fbToArr(snaps.val());
+      try { localStorage.setItem('vmd', JSON.stringify(DB)); } catch(e) {}
+      var el = document.querySelector('.menu-item.active');
+      if (el) { var r = el.getAttribute('data-route'); if (r) navigateTo(r); }
+    });
+  });
 }
-function _wa(a,p){
-    if(a._wp)return a;
-    Object.defineProperty(a,'_wp',{value:1,writable:!1});
-    for(var i=0;i<a.length;i++)a[i]=_dw(a[i],p+'['+i+']');
-    return new Proxy(a,{
-        get:function(t,pr){
-            var v=t[pr];
-            if(typeof pr!=='symbol'&&!isNaN(pr)&&v&&typeof v==='object'&&!v._wp)t[pr]=_dw(v,p+'['+pr+']');
-            return v
-        },
-        set:function(t,pr,v){
-            var ch=pr!=='length'&&t[pr]!==v;
-            t[pr]=(typeof pr!=='symbol'&&!isNaN(pr)&&v&&typeof v==='object')?_dw(v,p+'['+pr+']'):v;
-            if(ch)_qs();
-            return!0
-        },
-        deleteProperty:function(t,pr){if(pr in t){delete t[pr];_qs()}return!0}
-    })
+
+// saveDB: persiste localmente y sube TODAS las colecciones a Firebase
+var _st = null;
+function saveDB() {
+  if (_st) clearTimeout(_st);
+  _st = setTimeout(function() {
+    _st = null;
+    try { localStorage.setItem('vmd', JSON.stringify(DB)); } catch(e) {}
+    _syncCols.forEach(function(col) {
+      if (DB[col] !== undefined && DB[col] !== null)
+        fbDB.ref('db/' + col).set(DB[col]);
+    });
+  }, 100);
 }
-function _initAutoSync(){
-    _syncCols.forEach(function(c){if(Array.isArray(DB[c]))DB[c]=_wa(DB[c],c)});
-    var d=DB;
-    DB=new Proxy(DB,{
-        set:function(t,p,v){
-            t[p]=v;
-            if(_syncCols.indexOf(p)>=0&&Array.isArray(v))t[p]=_wa(v,p);
-            _qs();
-            return!0
-        }
-    })
-}
-function saveDB(){
-    try{localStorage.setItem('vmd',JSON.stringify(DB))}catch(e){}
-    if(!window._s&&window.sio&&window.sio.connected)_syncCols.forEach(function(c){if(DB[c]!==undefined)window.sio.emit('db-update',{collection:c,changes:DB[c]})})
-}
-function _qs(){if(!_st){_st=setTimeout(function(){_st=null;saveDB()},50)}}
-try{var _d=localStorage.getItem('vmd');if(_d){var _p=JSON.parse(_d);Object.keys(_p).forEach(function(k){if(k!=='sysconfig')DB[k]=_p[k]})}}catch(e){}
-_initAutoSync();
-window.sio=io(window.location.origin.replace(/:\d+$/,'')+':3000',{transports:['websocket','polling'],autoConnect:false});
-window.sio.on('connect',function(){window.sio.emit('get-initial-data',function(s){if(s){window._s=1;_syncCols.forEach(function(k){if(s[k]!==undefined)DB[k]=s[k]});window._s=0;saveDB()}})});
-_syncCols.forEach(function(c){window.sio.on('sync-'+c,function(d){window._s=1;DB[c]=d;window._s=0;var a=document.querySelector('.menu-item.active');if(a){var r=a.getAttribute('data-route');if(r)navigateTo(r)}})});
-window.sio.on('connect_error',function(){});
-window.sio.connect();
+
+// Cargar datos locales
+try { var _d = localStorage.getItem('vmd'); if (_d) { var _p = JSON.parse(_d); Object.keys(_p).forEach(function(k) { if (k !== 'sysconfig') DB[k] = _p[k]; }); } } catch(e) {}
+
+// Bootstrap: si Firebase esta vacio, subir datos locales
+_syncCols.forEach(function(col) {
+  fbDB.ref('db/' + col).once('value', function(snaps) {
+    if (!snaps.exists()) {
+      try {
+        var local = JSON.parse(localStorage.getItem('vmd'));
+        if (local && local[col] && local[col].length > 0)
+          fbDB.ref('db/' + col).set(local[col]);
+      } catch(e) {}
+    }
+  });
+});
+
+// Iniciar listeners de Firebase
+setTimeout(_initFbSync, 1000);
 </script>
 </body>
 </html>
