@@ -3057,11 +3057,54 @@ if(!window._publicMesaId){
 }
 </script>
 <script>
-function saveDB(){try{localStorage.setItem('vmd',JSON.stringify(DB))}catch(e){};if(window.sio&&window.sio.connected&&!window._s){['users','inventory','menu','orders','tables','areas','cashDesks','customers','salesHistory','reservations','promotions','deliveries','auditLogs','cashClosures','printers','printJobs','recipes','egresos'].forEach(function(c){if(DB[c]!==undefined)window.sio.emit('db-update',{collection:c,changes:DB[c]})})}}
+// ===== AUTO-SYNC: intercepta TODAS las mutaciones de datos automaticamente =====
+var _aS={};window._s=0;
+function _wrapSyncArray(arr,name){
+    if(_aS[name])return arr;
+    _aS[name]=1;
+    return new Proxy(arr,{
+        set:function(t,p,v){
+            var ch=p!=='length'&&t[p]!==v;
+            t[p]=v;
+            if(ch)_qSync();
+            return true
+        },
+        deleteProperty:function(t,p){
+            if(p in t){delete t[p];_qSync()}
+            return true
+        }
+    })
+}
+var _syncCols=['users','inventory','menu','orders','tables','areas','cashDesks','customers','salesHistory','reservations','promotions','deliveries','auditLogs','cashClosures','printers','printJobs','recipes','egresos'];
+function _initAutoSync(){
+    _syncCols.forEach(function(c){
+        if(Array.isArray(DB[c]))DB[c]=_wrapSyncArray(DB[c],c)
+    });
+    var _db=DB;
+    DB=new Proxy(DB,{
+        set:function(t,p,v){
+            t[p]=v;
+            if(_syncCols.indexOf(p)>=0&&Array.isArray(v))t[p]=_wrapSyncArray(v,p);
+            _qSync();
+            return true
+        }
+    })
+}
+function saveDB(){
+    try{localStorage.setItem('vmd',JSON.stringify(DB))}catch(e){}
+    if(!window._s&&window.sio&&window.sio.connected){
+        _syncCols.forEach(function(c){
+            if(DB[c]!==undefined)window.sio.emit('db-update',{collection:c,changes:DB[c]})
+        })
+    }
+}
+var _st=null;
+function _qSync(){if(!_st){_st=setTimeout(function(){_st=null;saveDB()},50)}}
 try{var _d=localStorage.getItem('vmd');if(_d){var _p=JSON.parse(_d);Object.keys(_p).forEach(function(k){if(k!=='sysconfig')DB[k]=_p[k]})}}catch(e){}
+_initAutoSync();
 window.sio=io(window.location.origin.replace(/:\d+$/,'')+':3000',{transports:['websocket','polling'],autoConnect:false});
-window.sio.on('connect',function(){window.sio.emit('get-initial-data',function(s){if(s){window._s=1;Object.keys(s).forEach(function(k){if(k!=='sysconfig')DB[k]=s[k]});try{localStorage.setItem('vmd',JSON.stringify(DB))}catch(e){};window._s=0}})});
-['users','tables','menu','inventory','recipes','orders','salesHistory','customers','reservations','promotions','deliveries','auditLogs','cashClosures','printers','printJobs','egresos','areas','cashDesks'].forEach(function(c){window.sio.on('sync-'+c,function(d){window._s=1;DB[c]=d;try{localStorage.setItem('vmd',JSON.stringify(DB))}catch(e){};window._s=0;var a=document.querySelector('.menu-item.active');if(a){var r=a.getAttribute('data-route');if(r)navigateTo(r)}})});
+window.sio.on('connect',function(){window.sio.emit('get-initial-data',function(s){if(s){window._s=1;_syncCols.forEach(function(k){if(s[k]!==undefined)DB[k]=s[k]});window._s=0;saveDB()}})});
+_syncCols.forEach(function(c){window.sio.on('sync-'+c,function(d){window._s=1;DB[c]=d;window._s=0;var a=document.querySelector('.menu-item.active');if(a){var r=a.getAttribute('data-route');if(r)navigateTo(r)}})});
 window.sio.on('connect_error',function(){});
 window.sio.connect();
 </script>
