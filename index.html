@@ -3057,49 +3057,57 @@ if(!window._publicMesaId){
 }
 </script>
 <script>
-// ===== AUTO-SYNC: intercepta TODAS las mutaciones de datos automaticamente =====
-var _aS={};window._s=0;
-function _wrapSyncArray(arr,name){
-    if(_aS[name])return arr;
-    _aS[name]=1;
-    return new Proxy(arr,{
-        set:function(t,p,v){
-            var ch=p!=='length'&&t[p]!==v;
-            t[p]=v;
-            if(ch)_qSync();
-            return true
-        },
-        deleteProperty:function(t,p){
-            if(p in t){delete t[p];_qSync()}
-            return true
-        }
+// ===== DEEP AUTO-SYNC: Proxy que atrapa TODA mutacion (arrays, objetos, propiedades anidadas) =====
+window._s=0;var _st=null,_syncCols=['users','inventory','menu','orders','tables','areas','cashDesks','customers','salesHistory','reservations','promotions','deliveries','auditLogs','cashClosures','printers','printJobs','recipes','egresos'];
+function _dw(v,p){
+    if(v===null||typeof v!=='object'||v._wp)return v;
+    return Array.isArray(v)?_wa(v,p):_wo(v,p)
+}
+function _wo(o,p){
+    if(o._wp)return o;
+    Object.defineProperty(o,'_wp',{value:1,writable:!1});
+    Object.keys(o).forEach(function(k){o[k]=_dw(o[k],p+'.'+k)});
+    return new Proxy(o,{
+        set:function(t,pr,v){var ch=t[pr]!==v;t[pr]=_dw(v,p+'.'+pr);if(ch)_qs();return!0},
+        deleteProperty:function(t,pr){if(pr in t){delete t[pr];_qs()}return!0}
     })
 }
-var _syncCols=['users','inventory','menu','orders','tables','areas','cashDesks','customers','salesHistory','reservations','promotions','deliveries','auditLogs','cashClosures','printers','printJobs','recipes','egresos'];
+function _wa(a,p){
+    if(a._wp)return a;
+    Object.defineProperty(a,'_wp',{value:1,writable:!1});
+    for(var i=0;i<a.length;i++)a[i]=_dw(a[i],p+'['+i+']');
+    return new Proxy(a,{
+        get:function(t,pr){
+            var v=t[pr];
+            if(typeof pr!=='symbol'&&!isNaN(pr)&&v&&typeof v==='object'&&!v._wp)t[pr]=_dw(v,p+'['+pr+']');
+            return v
+        },
+        set:function(t,pr,v){
+            var ch=pr!=='length'&&t[pr]!==v;
+            t[pr]=(typeof pr!=='symbol'&&!isNaN(pr)&&v&&typeof v==='object')?_dw(v,p+'['+pr+']'):v;
+            if(ch)_qs();
+            return!0
+        },
+        deleteProperty:function(t,pr){if(pr in t){delete t[pr];_qs()}return!0}
+    })
+}
 function _initAutoSync(){
-    _syncCols.forEach(function(c){
-        if(Array.isArray(DB[c]))DB[c]=_wrapSyncArray(DB[c],c)
-    });
-    var _db=DB;
+    _syncCols.forEach(function(c){if(Array.isArray(DB[c]))DB[c]=_wa(DB[c],c)});
+    var d=DB;
     DB=new Proxy(DB,{
         set:function(t,p,v){
             t[p]=v;
-            if(_syncCols.indexOf(p)>=0&&Array.isArray(v))t[p]=_wrapSyncArray(v,p);
-            _qSync();
-            return true
+            if(_syncCols.indexOf(p)>=0&&Array.isArray(v))t[p]=_wa(v,p);
+            _qs();
+            return!0
         }
     })
 }
 function saveDB(){
     try{localStorage.setItem('vmd',JSON.stringify(DB))}catch(e){}
-    if(!window._s&&window.sio&&window.sio.connected){
-        _syncCols.forEach(function(c){
-            if(DB[c]!==undefined)window.sio.emit('db-update',{collection:c,changes:DB[c]})
-        })
-    }
+    if(!window._s&&window.sio&&window.sio.connected)_syncCols.forEach(function(c){if(DB[c]!==undefined)window.sio.emit('db-update',{collection:c,changes:DB[c]})})
 }
-var _st=null;
-function _qSync(){if(!_st){_st=setTimeout(function(){_st=null;saveDB()},50)}}
+function _qs(){if(!_st){_st=setTimeout(function(){_st=null;saveDB()},50)}}
 try{var _d=localStorage.getItem('vmd');if(_d){var _p=JSON.parse(_d);Object.keys(_p).forEach(function(k){if(k!=='sysconfig')DB[k]=_p[k]})}}catch(e){}
 _initAutoSync();
 window.sio=io(window.location.origin.replace(/:\d+$/,'')+':3000',{transports:['websocket','polling'],autoConnect:false});
